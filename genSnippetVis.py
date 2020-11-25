@@ -33,12 +33,13 @@ class Vehicle:
         self.id = self.vehicle.id
 
         #create lidar sensor and registers callback
-        lidar_transform = carla.Transform(carla.Location(x=-0.5, z=2*self.vehicle.bounding_box.extent.z+0.2))
+        #lidar height is the height of the vehicle plus the necessary to avoid any points on the roof of the vehicle given the lower fov angle
+        hp = max(self.vehicle.bounding_box.extent.x,self.vehicle.bounding_box.extent.y)*np.tan(np.radians(-args.lower_fov))
+        lidar_transform = carla.Transform(carla.Location(z=2*self.vehicle.bounding_box.extent.z+hp))
         self.lidar= world.spawn_actor(self.get_lidar_bp(args), lidar_transform, attach_to=self.vehicle)
         self.lidar.listen(lambda data : self.lidar_callback(data))
 
     def get_random_blueprint(self):
-        blueprints = self.world.get_blueprint_library().filter('vehicle')
         blueprints = self.world.get_blueprint_library().filter('vehicle')
         blueprints = [x for x in blueprints if int(x.get_attribute('number_of_wheels')) == 4]
         blueprints = [x for x in blueprints if not x.id.endswith('isetta')]
@@ -55,6 +56,7 @@ class Vehicle:
         lidar_bp.set_attribute('points_per_second', str(args.points_per_second))
         lidar_bp.set_attribute('rotation_frequency', str(1.0 / args.delta))
         lidar_bp.set_attribute('channels', str(args.channels))
+        lidar_bp.set_attribute('lower_fov', str(args.lower_fov))
         lidar_bp.set_attribute('range', str(args.range))
         return lidar_bp
 
@@ -68,7 +70,6 @@ class Vehicle:
         self.vehicle.destroy()
 
 def transformPts(transform, pts, inverse=False):
-    '''Pts [N,4] corresponding to X,Y,Z, Intensity.'''
     #split intensity from 3D coordinates, add homogeneus coordinate
     intensity = pts[:,-1,np.newaxis].copy()
     pts[:,-1] = 1
@@ -82,11 +83,33 @@ def transformPts(transform, pts, inverse=False):
     ptst = np.concatenate([ptst[:,:3],intensity], axis=1)
     return ptst
 
+def carlaEventLoop(world, buf):
+    while(True):
+        world.tick()
+        snap = world.get_snapshot()
+        
+        fusedPCL = []
+        try:
+            for _ in range(len(Vehicle.instances)):
+                s = Vehicle.sensorQueue.get(True,5)
+                pcl = s[2]
+                transform = s[3]
+                pcl = transformPts(transform, pcl)
+                fusedPCL.append(pcl)
+        except Empty:
+            logging.error(f'Missing sensor data for frame {snap.frame}!')
+
+        fusedPCL = np.concatenate(fusedPCL, axis=0)
+        buf['pts'] = fusedPCL
+
+        logging.info(f'World frame {snap.frame}. Sensor data frame {s[0]} from all {len(Vehicle.instances)} vehicles')
+        time.sleep(0.05)
+
 def main(args):
     try:
         #Load client & world
         client = carla.Client(args.host, args.port)
-        client.set_timeout(2.0)
+        client.set_timeout(9.0)
         world = client.load_world(args.map)
 
         #Set configs
@@ -104,29 +127,24 @@ def main(args):
             transform = random.choice(spawn_points)
             Vehicle(transform, world, args)
 
+        fig = mlab.figure(size=(960,540), bgcolor=(0.05,0.05,0.05))
+        vis = mlab.points3d(0, 0, 0, 0, mode='point', figure=fig)
+        mlab.view(distance=25)
+        buf = {'pts': np.zeros((1,4))}
+
         #Main loop
-        while(True):
-            world.tick()
-            snap = world.get_snapshot()
-            
-            fusedPCL = []
-            try:
-                for _ in range(len(Vehicle.instances)):
-                    s = Vehicle.sensorQueue.get(True,5)
-                    pcl = s[2]
-                    transform = s[3]
-                    pcl = transformPts(transform, pcl)
-                    fusedPCL.append(pcl)
-            except Empty:
-                logging.error(f'Missing sensor data for frame {snap.frame}!')
+        t1 = threading.Thread(target=carlaEventLoop, args=[world,buf], daemon=True)
+        t1.start()
 
-            fusedPCL = np.concatenate(fusedPCL, axis=0)
-            mlab.points3d(fusedPCL[:,0],fusedPCL[:,1],fusedPCL[:,2], fusedPCL[:,3], mode='point')
-            mlab.show()
+        @mlab.animate(delay=100)
+        def anim():
+            while True:
+                vis.mlab_source.reset(x=buf['pts'][:,0], y=buf['pts'][:,1], z=buf['pts'][:,2], scalars=buf['pts'][:,3])
+                yield
 
-            logging.info(f'World frame {snap.frame}. Sensor data frame {s[0]} from all {len(Vehicle.instances)} vehicles')
-            time.sleep(0.05)
-
+        anim()
+        mlab.show()
+        
     finally:
         for v in Vehicle.instances:
             v.destroy()
@@ -162,6 +180,11 @@ if __name__ == '__main__':
         type=float,
         help='lidar\'s maximum range in meters (default: 100.0)')
     argparser.add_argument(
+        '--lower-fov',
+        default=-25.0,
+        type=float,
+        help='lidar\'s lower vertical fov angle in degrees (default: -25.0)')
+    argparser.add_argument(
         '--points-per-second',
         default=500000,
         type=int,
@@ -170,12 +193,12 @@ if __name__ == '__main__':
         '--delta',
         default=0.10,
         type=float,
-        help='fixed simulation time-steps. default: 0.1 (10fps)')
+        help='fixed simulation time-steps')
     argparser.add_argument(
         '--nvehicles',
-        default=1,
+        default=0,
         type=int,
-        help='number of vehicles in the environment (default: 1)')
+        help='number of vehicles in the environment (default: 0)')
     argparser.add_argument(
         '--no-autopilot',
         action='store_false',
