@@ -121,9 +121,11 @@ def main(args):
         settings.no_rendering_mode = args.no_rendering
         world.apply_settings(settings)
 
-        #Spawn vehicles
-        spawn_points = world.get_map().get_spawn_points()
-        for _ in range(args.nvehicles):
+        #Spawn vehicles (select one random point and only keep the points within the range - specificed according to lidar range)
+        spawn_points = [waypoint.transform for waypoint in world.get_map().generate_waypoints(5)] # waypoints every x meters 
+        sp_choice = random.choice(spawn_points)
+        spawn_points = [sp for sp in spawn_points if sp.location.distance(sp_choice.location) < args.range/2]
+        while(len(Vehicle.instances) < args.nvehicles):
             transform = random.choice(spawn_points)
             Vehicle(transform, world, args)
 
