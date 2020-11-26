@@ -53,8 +53,8 @@ class Vehicle:
         lidar_bp.set_attribute('dropoff_general_rate', '0.0')
         lidar_bp.set_attribute('dropoff_intensity_limit', '1.0')
         lidar_bp.set_attribute('dropoff_zero_intensity', '0.0')
-        lidar_bp.set_attribute('points_per_second', str(args.points_per_second))
-        lidar_bp.set_attribute('rotation_frequency', str(1.0 / args.delta))
+        lidar_bp.set_attribute('points_per_second', str(args.points_per_cloud*args.fps))
+        lidar_bp.set_attribute('rotation_frequency', str(args.fps))
         lidar_bp.set_attribute('channels', str(args.channels))
         lidar_bp.set_attribute('lower_fov', str(args.lower_fov))
         lidar_bp.set_attribute('range', str(args.range))
@@ -116,7 +116,7 @@ def main(args):
         settings = world.get_settings()
         traffic_manager = client.get_trafficmanager(8000)
         traffic_manager.set_synchronous_mode(True)
-        settings.fixed_delta_seconds = args.delta
+        settings.fixed_delta_seconds = 1. / args.fps
         settings.synchronous_mode = True
         settings.no_rendering_mode = args.no_rendering
         world.apply_settings(settings)
@@ -187,15 +187,15 @@ if __name__ == '__main__':
         type=float,
         help='lidar\'s lower vertical fov angle in degrees (default: -25.0)')
     argparser.add_argument(
-        '--points-per-second',
-        default=500000,
+        '--points-per-cloud',
+        default=50000,
         type=int,
-        help='lidar\'s points per second (default: 500000)')
+        help='lidar\'s points per measurement (default: 50000)')
     argparser.add_argument(
-        '--delta',
-        default=0.10,
+        '--fps',
+        default=10.0,
         type=float,
-        help='fixed simulation time-steps')
+        help='frames per second, define the fixed simulation time-steps. (default: 10fps)')
     argparser.add_argument(
         '--nvehicles',
         default=0,
