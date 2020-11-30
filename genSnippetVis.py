@@ -92,7 +92,7 @@ def carlaEventLoop(world, buf):
         try:
             for _ in range(len(Vehicle.instances)):
                 s = Vehicle.sensorQueue.get(True,5)
-                pcl = s[2]
+                pcl = s[2].astype(np.half)
                 transform = s[3]
                 pcl = transformPts(transform, pcl)
                 fusedPCL.append(pcl)

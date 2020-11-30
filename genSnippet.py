@@ -8,7 +8,6 @@ from queue import Queue, Empty
 
 import numpy as np
 import h5py
-from mayavi import mlab
 
 import fixpath
 import carla
@@ -33,12 +32,13 @@ class Vehicle:
         self.id = self.vehicle.id
 
         #create lidar sensor and registers callback
-        lidar_transform = carla.Transform(carla.Location(x=-0.5, z=2*self.vehicle.bounding_box.extent.z+0.2))
+        #lidar height is the height of the vehicle plus the necessary to avoid any points on the roof of the vehicle given the lower fov angle
+        hp = max(self.vehicle.bounding_box.extent.x,self.vehicle.bounding_box.extent.y)*np.tan(np.radians(-args.lower_fov))
+        lidar_transform = carla.Transform(carla.Location(z=2*self.vehicle.bounding_box.extent.z+hp))
         self.lidar= world.spawn_actor(self.get_lidar_bp(args), lidar_transform, attach_to=self.vehicle)
         self.lidar.listen(lambda data : self.lidar_callback(data))
 
     def get_random_blueprint(self):
-        blueprints = self.world.get_blueprint_library().filter('vehicle')
         blueprints = self.world.get_blueprint_library().filter('vehicle')
         blueprints = [x for x in blueprints if int(x.get_attribute('number_of_wheels')) == 4]
         blueprints = [x for x in blueprints if not x.id.endswith('isetta')]
@@ -52,9 +52,10 @@ class Vehicle:
         lidar_bp.set_attribute('dropoff_general_rate', '0.0')
         lidar_bp.set_attribute('dropoff_intensity_limit', '1.0')
         lidar_bp.set_attribute('dropoff_zero_intensity', '0.0')
-        lidar_bp.set_attribute('points_per_second', str(args.points_per_second))
-        lidar_bp.set_attribute('rotation_frequency', str(1.0 / args.delta))
+        lidar_bp.set_attribute('points_per_second', str(args.points_per_cloud*args.fps))
+        lidar_bp.set_attribute('rotation_frequency', str(args.fps))
         lidar_bp.set_attribute('channels', str(args.channels))
+        lidar_bp.set_attribute('lower_fov', str(args.lower_fov))
         lidar_bp.set_attribute('range', str(args.range))
         return lidar_bp
 
@@ -68,7 +69,6 @@ class Vehicle:
         self.vehicle.destroy()
 
 def transformPts(transform, pts, inverse=False):
-    '''Pts [N,4] corresponding to X,Y,Z, Intensity.'''
     #split intensity from 3D coordinates, add homogeneus coordinate
     intensity = pts[:,-1,np.newaxis].copy()
     pts[:,-1] = 1
@@ -86,46 +86,66 @@ def main(args):
     try:
         #Load client & world
         client = carla.Client(args.host, args.port)
-        client.set_timeout(2.0)
+        client.set_timeout(9.0)
         world = client.load_world(args.map)
 
         #Set configs
         settings = world.get_settings()
         traffic_manager = client.get_trafficmanager(8000)
         traffic_manager.set_synchronous_mode(True)
-        settings.fixed_delta_seconds = args.delta
+        settings.fixed_delta_seconds = 1. / args.fps
         settings.synchronous_mode = True
         settings.no_rendering_mode = args.no_rendering
         world.apply_settings(settings)
 
-        #Spawn vehicles
-        spawn_points = world.get_map().get_spawn_points()
-        for _ in range(args.nvehicles):
+        #Spawn vehicles (select one random point and only keep the points within the range - specificed according to lidar range)
+        spawn_points = [waypoint.transform for waypoint in world.get_map().generate_waypoints(5)] # waypoints every x meters 
+        sp_choice = random.choice(spawn_points)
+        spawn_points = [sp for sp in spawn_points if sp.location.distance(sp_choice.location) < args.range/2]
+        while(len(Vehicle.instances) < args.nvehicles):
             transform = random.choice(spawn_points)
             Vehicle(transform, world, args)
 
-        #Main loop
-        while(True):
+        #Create HDF5 file with datasets
+        compression_opts = {'compression':'gzip', 'compression_opts':9}
+        if args.save != '':
+            f = h5py.File(f'data/{args.save}.hdf5', 'w')
+            f.create_dataset('point_cloud', (args.frames, args.nvehicles, args.points_per_cloud, 4), dtype='float16', **compression_opts)
+            f.create_dataset('lidar_pose', (args.frames, args.nvehicles, 6), dtype='float32', **compression_opts)
+            f.create_dataset('vehicle_boundingbox', (args.frames, args.nvehicles, 8), dtype='float32', **compression_opts)
+
+        #Event loop
+        savedFrames = 0
+        while(savedFrames < args.frames):
             world.tick()
             snap = world.get_snapshot()
             
-            fusedPCL = []
             try:
-                for _ in range(len(Vehicle.instances)):
+                for i, v in enumerate(Vehicle.instances):
                     s = Vehicle.sensorQueue.get(True,5)
                     pcl = s[2]
                     transform = s[3]
-                    pcl = transformPts(transform, pcl)
-                    fusedPCL.append(pcl)
+
+                    #pad pcl with zeros to make sure it has shape [args.points_per_cloud,3]
+                    pcl_pad = np.pad(pcl, ((0, args.points_per_cloud-pcl.shape[0]),(0,0)), mode='constant')
+
+                    #get vehicle transform in the current frame and extent (extent has half the dimensions)
+                    v_transform = snap.find(v.id).get_transform()
+                    v_ext = v.vehicle.bounding_box.extent 
+
+                    #write data to file
+                    f['point_cloud'][savedFrames,i] = pcl_pad
+                    f['lidar_pose'][savedFrames, i] = np.array([transform.location.x,transform.location.y,transform.location.z, transform.rotation.pitch,transform.rotation.yaw,transform.rotation.roll])
+                    f['vehicle_boundingbox'][savedFrames, i] = np.array([v_transform.location.x,v_transform.location.y,v_transform.location.z,v_transform.rotation.yaw,v_transform.rotation.pitch,2*v_ext.x,2*v_ext.y,2*v_ext.z])
             except Empty:
                 logging.error(f'Missing sensor data for frame {snap.frame}!')
+            else:
+                savedFrames += 1
 
-            fusedPCL = np.concatenate(fusedPCL, axis=0)
-            mlab.points3d(fusedPCL[:,0],fusedPCL[:,1],fusedPCL[:,2], fusedPCL[:,3], mode='point')
-            mlab.show()
-
-            logging.info(f'World frame {snap.frame}. Sensor data frame {s[0]} from all {len(Vehicle.instances)} vehicles')
+            logging.info(f'World frame {snap.frame} saved succesfully as frame {savedFrames}')
             time.sleep(0.05)
+
+        logging.info(f'Finished saving {args.frames} frames!')
 
     finally:
         for v in Vehicle.instances:
@@ -162,20 +182,25 @@ if __name__ == '__main__':
         type=float,
         help='lidar\'s maximum range in meters (default: 100.0)')
     argparser.add_argument(
-        '--points-per-second',
-        default=500000,
-        type=int,
-        help='lidar\'s points per second (default: 500000)')
-    argparser.add_argument(
-        '--delta',
-        default=0.10,
+        '--lower-fov',
+        default=-25.0,
         type=float,
-        help='fixed simulation time-steps. default: 0.1 (10fps)')
+        help='lidar\'s lower vertical fov angle in degrees (default: -25.0)')
+    argparser.add_argument(
+        '--points-per-cloud',
+        default=50000,
+        type=int,
+        help='lidar\'s points per measurement (default: 50000)')
+    argparser.add_argument(
+        '--fps',
+        default=10.0,
+        type=float,
+        help='frames per second, define the fixed simulation time-steps. (default: 10fps)')
     argparser.add_argument(
         '--nvehicles',
-        default=1,
+        default=0,
         type=int,
-        help='number of vehicles in the environment (default: 1)')
+        help='number of vehicles in the environment (default: 0)')
     argparser.add_argument(
         '--no-autopilot',
         action='store_false',
@@ -186,6 +211,16 @@ if __name__ == '__main__':
         help='use the no-rendering mode which will provide some extra'
         ' performance but you will lose the articulated objects in the'
         ' lidar, such as pedestrians')
+    argparser.add_argument(
+        '-s', '--save',
+        default='',
+        type=str,
+        help='Snippet filename')
+    argparser.add_argument(
+        '--frames',
+        default=50,
+        type=int,
+        help='Number of frames to save (default: 50)')
     args = argparser.parse_args()
 
     try:
