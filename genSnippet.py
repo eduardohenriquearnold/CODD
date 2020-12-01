@@ -41,10 +41,7 @@ class Vehicle:
     def get_random_blueprint(self):
         blueprints = self.world.get_blueprint_library().filter('vehicle')
         blueprints = [x for x in blueprints if int(x.get_attribute('number_of_wheels')) == 4]
-        blueprints = [x for x in blueprints if not x.id.endswith('isetta')]
-        blueprints = [x for x in blueprints if not x.id.endswith('carlacola')]
-        blueprints = [x for x in blueprints if not x.id.endswith('cybertruck')]
-        blueprints = [x for x in blueprints if not x.id.endswith('t2')]
+        blueprints = [x for x in blueprints if not x.id.endswith(('isetta','carlacola','cybertruck','t2'))]
         return random.choice(blueprints)
 
     def get_lidar_bp(self, args):
@@ -67,6 +64,41 @@ class Vehicle:
     def destroy(self):
         self.lidar.destroy()
         self.vehicle.destroy()
+
+class Walker:
+    '''Spawns a walker in a given transform of the environment'''
+
+    #Class variable that stores references to all instances
+    instances = []
+
+    def __init__(self, transform, world, args):
+        '''Try to spawn walker in a given transform, if successful adds reference to instance list'''
+
+        self.world = world
+
+        #try spawning the actor
+        self.walker= world.try_spawn_actor(self.get_random_blueprint(), transform)
+        if self.walker is None:
+            return
+        Walker.instances.append(self)
+        self.id = self.walker.id
+
+        #spawn a controller for the walker
+        walker_controller_bp = world.get_blueprint_library().find('controller.ai.walker')
+        self.controller = world.spawn_actor(walker_controller_bp, carla.Transform(), self.walker)
+
+    def start_controller(self):
+        self.controller.start()
+        self.controller.go_to_location(self.world.get_random_location_from_navigation())
+
+    def get_random_blueprint(self):
+        blueprints = self.world.get_blueprint_library().filter('walker.pedestrian.*')
+        return random.choice(blueprints)
+
+    def destroy(self):
+        self.controller.stop()
+        self.controller.destroy()
+        self.walker.destroy()
 
 def transformPts(transform, pts, inverse=False):
     #split intensity from 3D coordinates, add homogeneus coordinate
@@ -110,6 +142,13 @@ def main(args):
             transform = random.choice(spawn_points)
             Vehicle(transform, world, args)
 
+        #Spawn walkers in the environments
+        while(len(Walker.instances) < args.npedestrians):
+            location = world.get_random_location_from_navigation()
+            if location.distance(sp_choice.location) > args.range/2:
+                continue
+            Walker(carla.Transform(location=location), world, args)
+
         #Create HDF5 file with datasets
         compression_opts = {'compression':'gzip', 'compression_opts':9}
         if args.save != '':
@@ -117,12 +156,18 @@ def main(args):
             f.create_dataset('point_cloud', (args.frames, args.nvehicles, args.points_per_cloud, 4), dtype='float16', **compression_opts)
             f.create_dataset('lidar_pose', (args.frames, args.nvehicles, 6), dtype='float32', **compression_opts)
             f.create_dataset('vehicle_boundingbox', (args.frames, args.nvehicles, 8), dtype='float32', **compression_opts)
+            f.create_dataset('pedestrian_boundingbox', (args.frames, args.npedestrians, 8), dtype='float32', **compression_opts)
 
         #Event loop
         savedFrames = -args.burn 
         while(savedFrames < args.frames):
             world.tick()
             snap = world.get_snapshot()
+
+            #Pedestrian controllers must be started after first tick
+            if savedFrames == 1:
+                for w in Walker.instances:
+                    w.start_controller()
             
             try:
                 for i, v in enumerate(Vehicle.instances):
@@ -130,6 +175,7 @@ def main(args):
                     pcl = s[2]
                     transform = s[3]
 
+                    #if burning frames we should not save them
                     if savedFrames < 0:
                         continue
 
@@ -143,7 +189,13 @@ def main(args):
                     #write data to file
                     f['point_cloud'][savedFrames,i] = pcl_pad
                     f['lidar_pose'][savedFrames, i] = np.array([transform.location.x,transform.location.y,transform.location.z, transform.rotation.pitch,transform.rotation.yaw,transform.rotation.roll])
-                    f['vehicle_boundingbox'][savedFrames, i] = np.array([v_transform.location.x,v_transform.location.y,v_transform.location.z,v_transform.rotation.yaw,v_transform.rotation.pitch,2*v_ext.x,2*v_ext.y,2*v_ext.z])
+                    f['vehicle_boundingbox'][savedFrames, i] = np.array([v_transform.location.x,v_transform.location.y,v_transform.location.z+v_ext.z,v_transform.rotation.yaw,v_transform.rotation.pitch,2*v_ext.x,2*v_ext.y,2*v_ext.z])
+                for i, w in enumerate(Walker.instances):
+                    if savedFrames < 0:
+                        continue
+                    w_transform = snap.find(w.id).get_transform()
+                    w_ext = w.walker.bounding_box.extent
+                    f['pedestrian_boundingbox'][savedFrames, i] = np.array([w_transform.location.x,w_transform.location.y,w_transform.location.z,w_transform.rotation.yaw,w_transform.rotation.pitch,2*w_ext.x,2*w_ext.y,2*w_ext.z])
             except Empty:
                 logging.error(f'Missing sensor data for frame {snap.frame}!')
             else:
@@ -153,13 +205,15 @@ def main(args):
                 logging.info(f'World frame {snap.frame} burnt, {-savedFrames} to start recording')
             else:
                 logging.info(f'World frame {snap.frame} saved succesfully as frame {savedFrames}')
-            time.sleep(0.05)
+            time.sleep(0.01)
 
         logging.info(f'Finished saving {args.frames} frames!')
 
     finally:
         for v in Vehicle.instances:
             v.destroy()
+        for w in Walker.instances:
+            w.destroy()
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(message)s', level=logging.INFO)
@@ -211,6 +265,11 @@ if __name__ == '__main__':
         default=0,
         type=int,
         help='number of vehicles in the environment (default: 0)')
+    argparser.add_argument(
+        '--npedestrians',
+        default=0,
+        type=int,
+        help='number of pedestrians in the environment (default: 0)')
     argparser.add_argument(
         '--no-autopilot',
         action='store_false',

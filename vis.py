@@ -48,7 +48,7 @@ def transformPoints(transformMatrix, pts, inverse=False):
 
 def updateBoundingBox(x,y,z,yaw,pitch,w,l,h, vis_bb):
     #Create 8 corner points
-    cpts = 0.5*np.array([[-1,1,-1],[1,1,-1],[1,-1,-1],[-1,-1,-1],[-1,1,1],[1,1,1],[1,-1,1],[-1,-1,1]]) + np.array([[0,0,0.5]])
+    cpts = 0.5*np.array([[-1,1,-1],[1,1,-1],[1,-1,-1],[-1,-1,-1],[-1,1,1],[1,1,1],[1,-1,1],[-1,-1,1]])
     cpts *= np.array([[w,l,h]])
     cpts = transformPoints(getTransform(x,y,z,pitch,yaw,0), cpts)
 
@@ -63,23 +63,30 @@ def main(args):
     f = h5py.File(args.filename, 'r')
     pcls = f['point_cloud']
     lidar_pose = f['lidar_pose']
-    bbs = f['vehicle_boundingbox']
+    vbbs = f['vehicle_boundingbox']
+    pbbs = f['pedestrian_boundingbox']
     
     nframes = pcls.shape[0]
     nvehicles = pcls.shape[1]
+    npedestrians = pbbs.shape[1]
 
     #Create Mayavi Visualisation
     fig = mlab.figure(size=(960,540), bgcolor=(0.05,0.05,0.05))
     zeros = np.zeros(pcls.shape[1]*pcls.shape[2])
     vis = mlab.points3d(zeros, zeros, zeros, zeros, mode='point', figure=fig)
     zeros = np.zeros(16)
-    vis_bbs = [mlab.plot3d(zeros, zeros, zeros, zeros, color=(0,1,0), tube_radius=None, line_width=1, figure=fig) for i in range(nvehicles)]
+    vis_vbbs = [mlab.plot3d(zeros, zeros, zeros, zeros, color=(0,1,0), tube_radius=None, line_width=1, figure=fig) for i in range(nvehicles)]
+    vis_pbbs = [mlab.plot3d(zeros, zeros, zeros, zeros, color=(0,1,1), tube_radius=None, line_width=1, figure=fig) for i in range(npedestrians)]
 
     #Iterate through frames
     @mlab.animate(delay=100)
     def anim():
         for frame in range(nframes):
             print(f'Frame {frame}')
+
+            #Update pedestrian bounding boxes
+            for i in range(npedestrians):
+                updateBoundingBox(*pbbs[frame, i].tolist(), vis_pbbs[i])
 
             fusedPCL = []
             for i in range(nvehicles):
@@ -90,7 +97,7 @@ def main(args):
                 fusedPCL.append(pcl_global)
 
                 #Update the vehicle BB visualisation
-                updateBoundingBox(*bbs[frame,i].tolist(), vis_bbs[i])
+                updateBoundingBox(*vbbs[frame,i].tolist(), vis_vbbs[i])
 
             #Update PCL visualisation with Mayavi
             fusedPCL = np.concatenate(fusedPCL, axis=0)
