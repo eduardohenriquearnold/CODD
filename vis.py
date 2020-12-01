@@ -52,7 +52,7 @@ def updateBoundingBox(x,y,z,yaw,pitch,w,l,h, vis_bb):
     cpts *= np.array([[w,l,h]])
     cpts = transformPoints(getTransform(x,y,z,pitch,yaw,0), cpts)
 
-    #list of 15 points to create whole BB
+    #list of 16 points to create whole BB
     pts = cpts[[0,3,7,3,2,6,2,1,5,1,0,4,7,6,5,4],:]
 
     #update vis
@@ -90,7 +90,7 @@ def main(args):
                 fusedPCL.append(pcl_global)
 
                 #Update the vehicle BB visualisation
-                updateBoundingBox(*bbs[frame,i].tolist(),vis_bbs[i])
+                updateBoundingBox(*bbs[frame,i].tolist(), vis_bbs[i])
 
             #Update PCL visualisation with Mayavi
             fusedPCL = np.concatenate(fusedPCL, axis=0)
