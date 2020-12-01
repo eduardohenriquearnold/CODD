@@ -115,7 +115,7 @@ def main(args):
             f.create_dataset('vehicle_boundingbox', (args.frames, args.nvehicles, 8), dtype='float32', **compression_opts)
 
         #Event loop
-        savedFrames = 0
+        savedFrames = -args.burn 
         while(savedFrames < args.frames):
             world.tick()
             snap = world.get_snapshot()
@@ -125,6 +125,9 @@ def main(args):
                     s = Vehicle.sensorQueue.get(True,5)
                     pcl = s[2]
                     transform = s[3]
+
+                    if savedFrames < 0:
+                        continue
 
                     #pad pcl with zeros to make sure it has shape [args.points_per_cloud,3]
                     pcl_pad = np.pad(pcl, ((0, args.points_per_cloud-pcl.shape[0]),(0,0)), mode='constant')
@@ -142,7 +145,10 @@ def main(args):
             else:
                 savedFrames += 1
 
-            logging.info(f'World frame {snap.frame} saved succesfully as frame {savedFrames}')
+            if savedFrames < 0:
+                logging.info(f'World frame {snap.frame} burnt, {-savedFrames} to start recording')
+            else:
+                logging.info(f'World frame {snap.frame} saved succesfully as frame {savedFrames}')
             time.sleep(0.05)
 
         logging.info(f'Finished saving {args.frames} frames!')
@@ -221,6 +227,11 @@ if __name__ == '__main__':
         default=50,
         type=int,
         help='Number of frames to save (default: 50)')
+    argparser.add_argument(
+        '--burn',
+        default=30,
+        type=int,
+        help='Number of frames to discard before recording (default: 30)')
     args = argparser.parse_args()
 
     try:
