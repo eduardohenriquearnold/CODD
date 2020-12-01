@@ -93,10 +93,14 @@ def main(args):
         settings = world.get_settings()
         traffic_manager = client.get_trafficmanager(8000)
         traffic_manager.set_synchronous_mode(True)
+        traffic_manager.set_random_device_seed(args.seed)
         settings.fixed_delta_seconds = 1. / args.fps
         settings.synchronous_mode = True
         settings.no_rendering_mode = args.no_rendering
         world.apply_settings(settings)
+
+        #Apply seed for reproducibility
+        random.seed(args.seed)
 
         #Spawn vehicles (select one random point and only keep the points within the range - specificed according to lidar range)
         spawn_points = [waypoint.transform for waypoint in world.get_map().generate_waypoints(5)] # waypoints every x meters 
@@ -232,6 +236,11 @@ if __name__ == '__main__':
         default=30,
         type=int,
         help='Number of frames to discard before recording (default: 30)')
+    argparser.add_argument(
+        '--seed',
+        default=int(time.time()),
+        type=int,
+        help='Random seed for reproducibility (default: time.time())')
     args = argparser.parse_args()
 
     try:
