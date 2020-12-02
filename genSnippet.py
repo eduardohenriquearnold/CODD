@@ -16,7 +16,7 @@ class Vehicle:
     '''Creates and spawn a vehicle with a lidar sensor'''
 
     #Class variable that stores references to all instances
-    instances = weakref.WeakSet()
+    instances = []
     sensorQueue = Queue()
 
     def __init__(self, transform, world, args):
@@ -27,7 +27,7 @@ class Vehicle:
         self.vehicle = world.try_spawn_actor(self.get_random_blueprint(), transform)
         if self.vehicle is None:
             return
-        Vehicle.instances.add(self)
+        Vehicle.instances.append(self)
         self.vehicle.set_autopilot(args.no_autopilot)
         self.id = self.vehicle.id
 
@@ -135,6 +135,7 @@ def main(args):
         random.seed(args.seed)
 
         #Spawn vehicles (select one random point and only keep the points within the range - specificed according to lidar range)
+        logging.info('Spawning vehicles')
         spawn_points = [waypoint.transform for waypoint in world.get_map().generate_waypoints(5)] # waypoints every x meters 
         sp_choice = random.choice(spawn_points)
         spawn_points = [sp for sp in spawn_points if sp.location.distance(sp_choice.location) < args.range/2]
@@ -143,6 +144,7 @@ def main(args):
             Vehicle(transform, world, args)
 
         #Spawn walkers in the environments
+        logging.info('Spawning pedestrians')
         while(len(Walker.instances) < args.npedestrians):
             location = world.get_random_location_from_navigation()
             if location.distance(sp_choice.location) > args.range/2:
@@ -152,7 +154,7 @@ def main(args):
         #Create HDF5 file with datasets
         compression_opts = {'compression':'gzip', 'compression_opts':9}
         if args.save != '':
-            f = h5py.File(f'data/{args.save}.hdf5', 'w')
+            f = h5py.File(args.save, 'w')
             f.create_dataset('point_cloud', (args.frames, args.nvehicles, args.points_per_cloud, 4), dtype='float16', **compression_opts)
             f.create_dataset('lidar_pose', (args.frames, args.nvehicles, 6), dtype='float32', **compression_opts)
             f.create_dataset('vehicle_boundingbox', (args.frames, args.nvehicles, 8), dtype='float32', **compression_opts)
@@ -176,7 +178,7 @@ def main(args):
                     transform = s[3]
 
                     #if burning frames we should not save them
-                    if savedFrames < 0:
+                    if savedFrames < 0 or args.save == '':
                         continue
 
                     #pad pcl with zeros to make sure it has shape [args.points_per_cloud,3]
@@ -191,7 +193,7 @@ def main(args):
                     f['lidar_pose'][savedFrames, i] = np.array([transform.location.x,transform.location.y,transform.location.z, transform.rotation.pitch,transform.rotation.yaw,transform.rotation.roll])
                     f['vehicle_boundingbox'][savedFrames, i] = np.array([v_transform.location.x,v_transform.location.y,v_transform.location.z+v_ext.z,v_transform.rotation.yaw,v_transform.rotation.pitch,2*v_ext.x,2*v_ext.y,2*v_ext.z])
                 for i, w in enumerate(Walker.instances):
-                    if savedFrames < 0:
+                    if savedFrames < 0 or args.save == '':
                         continue
                     w_transform = snap.find(w.id).get_transform()
                     w_ext = w.walker.bounding_box.extent
@@ -210,10 +212,10 @@ def main(args):
         logging.info(f'Finished saving {args.frames} frames!')
 
     finally:
-        for v in Vehicle.instances:
-            v.destroy()
-        for w in Walker.instances:
-            w.destroy()
+        for a in Vehicle.instances + Walker.instances:
+            a.destroy()
+        Vehicle.instances.clear()
+        Walker.instances.clear()
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(message)s', level=logging.INFO)
@@ -284,7 +286,7 @@ if __name__ == '__main__':
         '-s', '--save',
         default='',
         type=str,
-        help='Snippet filename')
+        help='Snippet path and filename with extension (h5py or h5)')
     argparser.add_argument(
         '--frames',
         default=50,
