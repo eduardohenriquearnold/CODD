@@ -141,6 +141,7 @@ def main(args):
         spawn_points = [sp for sp in spawn_points if sp.location.distance(sp_choice.location) < args.range/2]
         while(len(Vehicle.instances) < args.nvehicles):
             transform = random.choice(spawn_points)
+            transform.location.z += 0.3 #avoid colision with ground
             Vehicle(transform, world, args)
 
         #Spawn walkers in the environments
@@ -161,7 +162,7 @@ def main(args):
             f.create_dataset('pedestrian_boundingbox', (args.frames, args.npedestrians, 8), dtype='float32', **compression_opts)
 
         #Event loop
-        savedFrames = -args.burn 
+        savedFrames = -args.burn
         while(savedFrames < args.frames):
             world.tick()
             snap = world.get_snapshot()
