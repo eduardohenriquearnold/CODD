@@ -31,15 +31,17 @@ Where
 - `pedestrians` is the number of pedestrians in the environment.
 
 Notes:
-1. The point clouds are in the local coordinate system of each sensor, whose pose is given by `lidar_pose`
+1. The point clouds are in the local coordinate system of each sensor, whose pose is given by `lidar_pose`.
 2. Angles are always in degrees.
 3. Pose is represented using the UnrealEngine4 left-hand coordinate system. An example to reconstruct a transformation matrix from local -> global is available in `vis.py`, where such matrix is used to aggregate all local lidar point clouds into a global reference system.
+4. The vehicle index is shared across `pointcloud`, `lidar_pose` and `vehicle_boundingbox`, i.e. the point cloud at index [frame,i] correspond to the vehicle with bounding box at [frame,i].
+5. The vehicle and pedestrian indeces are consistent across frames, allowing to determine the track of a given vehicle/pedestrian.
 
 ## Generating data
 To generate the data one must firstly start the CARLA simlator:
 ```
 cd CARLA_PATH
-./CARLA_UE4.sh
+./CARLAUE4.sh
 ```
 
 Then one can create a snippet using

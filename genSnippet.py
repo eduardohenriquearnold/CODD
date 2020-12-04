@@ -17,7 +17,6 @@ class Vehicle:
 
     #Class variable that stores references to all instances
     instances = []
-    sensorQueue = Queue()
 
     def __init__(self, transform, world, args):
         '''Try to spawn vehicle at given transform, may fail due to collision. If it doesnt, spawns lidar sensor and add object to instances'''
@@ -30,6 +29,7 @@ class Vehicle:
         Vehicle.instances.append(self)
         self.vehicle.set_autopilot(args.no_autopilot)
         self.id = self.vehicle.id
+        self.sensorQueue = Queue()
 
         #create lidar sensor and registers callback
         #lidar height is the height of the vehicle plus the necessary to avoid any points on the roof of the vehicle given the lower fov angle
@@ -59,7 +59,7 @@ class Vehicle:
     def lidar_callback(self, data):
         points = np.copy(np.frombuffer(data.raw_data, dtype=np.dtype('f4')))
         point_cloud = np.reshape(points, (int(points.shape[0] / 4), 4))
-        Vehicle.sensorQueue.put((data.frame, self.id, point_cloud, data.transform))
+        self.sensorQueue.put((data.frame, point_cloud, data.transform))
 
     def destroy(self):
         self.lidar.destroy()
@@ -147,8 +147,11 @@ def main(args):
         #Spawn walkers in the environments
         logging.info('Spawning pedestrians')
         retries = 0
-        while(len(Walker.instances) < args.npedestrians and retries < 1000):
+        while(len(Walker.instances) < args.npedestrians):
             retries += 1
+            if retries > 1000:
+                logging.error('Could not spawn pedestrians after 1000 tries. Crash.')
+                exit(1)
             location = world.get_random_location_from_navigation()
             if location.distance(sp_choice.location) > args.range/2:
                 continue
@@ -176,9 +179,9 @@ def main(args):
             
             try:
                 for i, v in enumerate(Vehicle.instances):
-                    s = Vehicle.sensorQueue.get(True,5)
-                    pcl = s[2]
-                    transform = s[3]
+                    s = v.sensorQueue.get(True,5)
+                    pcl = s[1]
+                    transform = s[2]
 
                     #if burning frames we should not save them
                     if savedFrames < 0 or args.save == '':

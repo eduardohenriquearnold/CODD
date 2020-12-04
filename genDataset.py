@@ -44,7 +44,7 @@ for i in range(1,opts.N+1):
     args.no_autopilot = True
     args.no_rendering = False
     args.seed = np.random.randint(*uniform_seed)
-    args.save = f'data/test1/m{mapNumber}v{args.nvehicles}p{args.npedestrians}s{args.seed}.hdf5'
+    args.save = f'data/m{mapNumber}v{args.nvehicles}p{args.npedestrians}s{args.seed}.hdf5'
     args.frames = nframes
     args.burn = burn
     print(args)
