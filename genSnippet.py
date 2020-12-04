@@ -146,7 +146,9 @@ def main(args):
 
         #Spawn walkers in the environments
         logging.info('Spawning pedestrians')
-        while(len(Walker.instances) < args.npedestrians):
+        retries = 0
+        while(len(Walker.instances) < args.npedestrians and retries < 1000):
+            retries += 1
             location = world.get_random_location_from_navigation()
             if location.distance(sp_choice.location) > args.range/2:
                 continue
