@@ -11,7 +11,7 @@ We describe the structure of the dataset and how to generate data below.
 - CARLA >= 0.9.10 
 - Python 3.X
 - h5py
-- Mayavi (optional, for visualisation)
+- Mayavi >= 4.7.2 (optional, for visualisation)
 
 Note: If the CARLA python package is not available in the python path you need to manually provide the path to the `.egg` file in `fixpath.py`.
 
@@ -70,7 +70,7 @@ To visualise the data one can use
 python vis.py [path_to_snippet]
 ```
 
-Note that you may have to pause the animation and click on the Z icon to reset the view to the centre of the coordinates.
+Note that you may want to pause the animation and adjust the view.
 The visualisation iteratively goes through all the frames, presenting the fused point cloud from all vehicles.
 It also shows the ground-truth bounding boxes for vehicles (in green) and pedestrians (in cyan).
 

@@ -102,6 +102,10 @@ def main(args):
             #Update PCL visualisation with Mayavi
             fusedPCL = np.concatenate(fusedPCL, axis=0)
             vis.mlab_source.set(x=fusedPCL[:,0], y=fusedPCL[:,1], z=fusedPCL[:,2], scalars=fusedPCL[:,3])
+
+            #Set top-view if first frame
+            if frame == 0:
+                mlab.gcf().scene.z_plus_view()
             yield
 
     anim()
