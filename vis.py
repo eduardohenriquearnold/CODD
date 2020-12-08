@@ -16,7 +16,7 @@ def getTransform(x, y, z, pitch, yaw, roll, degrees=True):
     mat = np.array([cp * cy, cy * sp * sr - sy * cr, -cy * sp * cr - sy * sr, x, \
                     cp * sy, sy * sp * sr + cy * cr, -sy * sp * cr + cy * sr, y, \
                          sp,               -cp * sr,                 cp * cr, z, \
-                          0,                      0,                       0, 0], dtype=np.float).reshape(4,4)
+                          0,                      0,                       0, 1], dtype=np.float).reshape(4,4)
 
     return mat
 
