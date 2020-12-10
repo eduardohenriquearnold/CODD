@@ -64,8 +64,8 @@ Other options may be individually set-up within the script.
 
 Note: Town06,Town07 and Town10HD need to be installed separately in CARLA, see [here](https://carla.readthedocs.io/en/latest/start_quickstart/#import-additional-assets).
 
-## Visualising data
-To visualise the data one can use
+## Visualising the snippets 
+To visualise a snippet one can use
 ```
 python vis.py [path_to_snippet]
 ```
@@ -74,9 +74,12 @@ Note that you may want to pause the animation and adjust the view.
 The visualisation iteratively goes through all the frames, presenting the fused point cloud from all vehicles.
 It also shows the ground-truth bounding boxes for vehicles (in green) and pedestrians (in cyan).
 
-## Our dataset parameters
-For our CODD generated dataset, link to be provided, we selected the following parameters:
+## Downloading the Dataset
+Although this repository provided the tools to generate your own dataset, we have generated an official release of the dataset.
+This dataset contains 108 snippets across all available CARLA maps. 
+[Download here](https://livewarwickac-my.sharepoint.com/:u:/g/personal/u1793915_live_warwick_ac_uk/ESGKXrOVZ2BAmbvV4HviTPkB0ICOL7b0vt6hl4LdotSXcQ?e=mZOgHe)
 
+This dataset was generated with the following settings:
 - 5 fps
 - 125 frames (corresponding to 25s of simulation time per snippet)
 - 50k point per cloud
