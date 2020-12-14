@@ -49,10 +49,15 @@ Then one can create a snippet using
 python genSnippet.py --map Town03 --fps 5 --frames 50 --burn 30 --nvehicles 10 --npedestrians 3 --range 100 -s test.hdf5
 ```
 This creates a snippet `test.hdf5` in Town03 with a rate of 5 frames per second, saving 50 frames (corresponds to 10s of simulation time) in a scenario with 10 vehicles (we collect lidar data from all of them) and 3 pedestrians.
+
 The `burn` argument is used to discard the first 30 frames since the vehicles will be stopped or slowly moving (due to inertia), so we would get many highly correlated frames without new information.
+
 Note that this script randomly select a location in the map and tries to spawn all the vehicles within `range` meters of this location, which increases the likelihood the vehicles will share their field-of-view (see one another).
+
 The `range` also specifies the maximum range of the lidar sensors.
+
 The `seed` argument defines the RNG seed which allows to reproduce the same scenario (spawn points, trajectories, etc) and change any sensor characteristics across runs.
+
 For more options, such as the number of points per cloud or the number of lidar lasers, or the lower lidar angle, see `python genSnippet.py -h`.
 
 Alternatively, to generate a collection of snippets one can use
@@ -77,8 +82,10 @@ It also shows the ground-truth bounding boxes for vehicles (in green) and pedest
 
 ## Downloading the Dataset
 Although this repository provided the tools to generate your own dataset, we have generated an official release of the dataset.
+
 This dataset contains 108 snippets across all available CARLA maps. 
 The snippets file names encode the properties of the snippes as `m[mapNumber]v[numVehicles]p[numPedestrians]s[seed].hdf5`.
+
 [Download here](https://livewarwickac-my.sharepoint.com/:u:/g/personal/u1793915_live_warwick_ac_uk/ESGKXrOVZ2BAmbvV4HviTPkB0ICOL7b0vt6hl4LdotSXcQ?e=mZOgHe).
 
 This dataset was generated with the following settings:
