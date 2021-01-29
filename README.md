@@ -5,10 +5,10 @@ The dataset is composed of snippets, which are independent sequences in differen
 The snippets are saved in efficient HDF5 storage containers.
 We describe the structure of the dataset and how to generate data below.
 
-![screenshot](shot.png)
+![static frame](static/shot.png)
 
 ## Requirements
-- CARLA >= 0.9.10 
+- CARLA >= 0.9.10
 - Python 3.X
 - h5py
 - Mayavi >= 4.7.2 (optional, for visualisation)
@@ -25,7 +25,7 @@ Each snippet is saved as an HDF5 file with the following arrays (HDF5 datasets):
 - `pedestrian_boundingbox` with dimensions `[frames, pedestrians , 8]` where the last coordinates represent the 3DBB encoded as before.
 
 Where
-- `frames` indicate the number of frames in the snippet. 
+- `frames` indicate the number of frames in the snippet.
 - `vehicles` is the number of vehicles in the environment. Note that all vehicles have lidars that we use to collect data.
 - `point_per_cloud` is the maximum number of points per pointcloud. Sometimes a given pointcloud will have less points that this maximum, in that case we pad the entries with zeros to be able to concatenate them into a uniformly sized array.
 - `pedestrians` is the number of pedestrians in the environment.
@@ -70,7 +70,7 @@ Other options may be individually set-up within the script.
 
 Note: Town06,Town07 and Town10HD need to be installed separately in CARLA, see [here](https://carla.readthedocs.io/en/latest/start_quickstart/#import-additional-assets).
 
-## Visualising the snippets 
+## Visualising the snippets
 To visualise a snippet one can use
 ```
 python vis.py [path_to_snippet]
@@ -80,10 +80,12 @@ Note that you may want to pause the animation and adjust the view.
 The visualisation iteratively goes through all the frames, presenting the fused point cloud from all vehicles.
 It also shows the ground-truth bounding boxes for vehicles (in green) and pedestrians (in cyan).
 
+![video showing frames](static/video.gif)
+
 ## Downloading the Dataset
 Although this repository provided the tools to generate your own dataset, we have generated an official release of the dataset.
 
-This dataset contains 108 snippets across all available CARLA maps. 
+This dataset contains 108 snippets across all available CARLA maps.
 The snippets file names encode the properties of the snippes as `m[mapNumber]v[numVehicles]p[numPedestrians]s[seed].hdf5`.
 
 [Download here](https://livewarwickac-my.sharepoint.com/:u:/g/personal/u1793915_live_warwick_ac_uk/ESGKXrOVZ2BAmbvV4HviTPkB0ICOL7b0vt6hl4LdotSXcQ?e=mZOgHe).
