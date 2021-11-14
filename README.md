@@ -1,27 +1,23 @@
 # Cooperative Driving Dataset (CODD)
 
-This repository contains the code to generate a cooperative driving dataset using the [CARLA](https://github.com/carla-simulator/carla) simulator.
-The dataset is composed of snippets, which are independent sequences in different scenarios.
-The snippets are saved in efficient HDF5 storage containers.
-We describe the structure of the dataset and how to generate data below.
+The Cooperative Driving dataset is a synthetic dataset generated using [CARLA](https://github.com/carla-simulator/carla) that contains lidar data from multiple vehicles navigating simultaneously through a diverse set of driving scenarios.
+This dataset was created to enable further research in multi-agent perception (cooperative perception) including cooperative 3D object detection, cooperative object tracking, multi-agent SLAM and point cloud registration.
+Towards that goal, all the frames have been labelled with ground-truth sensor pose and 3D object bounding boxes.
+
+This repository details the organisation of the dataset, including its data sctructure, and how to visualise the data.
+Additionally, it contains the code used to create the dataset, allowing users to customly create their own dataset.
 
 ![static frame](static/shot.png)
+![video showing frames](static/video2.gif)
 
-## Requirements
-- CARLA >= 0.9.10
-- Python 3.X
-- h5py
-- Mayavi >= 4.7.2 (optional, for visualisation)
+## Data structure
 
-Note: If the CARLA python package is not available in the python path you need to manually provide the path to the `.egg` file in `fixpath.py`.
+The dataset is composed of snippets, each containing a sequence of temporal frames in one driving environment. Each frame in a snippet corresponds to a temporal slice of data, containing sensor data (lidar) from **all** vehicles in that environment, as well as the absolute pose of the sensor and ground-truth annotations for the 3D bounding boxes of vehicles and pedestrians.
+Each snippet is saved as an HDF5 file containing the following arrays (HDF5 datasets):
 
-## Snippets / Data structure
-A snippet is a sequence of temporal frames in an environment. Each frame in a snippet contains sensor data (lidar) from **all** vehicles in the environment, as well as the absolute pose of the sensor and ground-truth annotations for the 3D bounding boxes of vehicles and pedestrians.
-Each snippet is saved as an HDF5 file with the following arrays (HDF5 datasets):
-
-- `pointcloud` with dimensions `[frames, vehicles, points_per_cloud, 4]` where the last dimensions represent the X,Y,Z and intensity coordinates of the lidar points.
-- `lidar_pose` with dimensions `[frames, vehicles, 6]` where the last coordinates represent the X,Y,Z,pitch,yaw,roll of the global sensor pose.
-- `vehicle_boundingbox` with dimensions `[frames, vehicles, 8]` where the last coordinates represent the 3DBB encoded by X,Y,Z,yaw,pitch,Width,Length,Height. Note that the X,Y,Z correspond to the centre of the 3DBB in the global coordinates. We do not include roll as it is irrelevant for this application.
+- `pointcloud` with dimensions `[frames, vehicles, points_per_cloud, 4]` where the last dimensions represent the X,Y,Z and intensity coordinates of the lidar points in the local sensor coordinate system.
+- `lidar_pose` with dimensions `[frames, vehicles, 6]` where the last coordinates represent the X,Y,Z,pitch,yaw,roll of the global sensor pose. These can be used to compute the transformation that maps from the local sensor coordinate system to the global coordinate system.
+- `vehicle_boundingbox` with dimensions `[frames, vehicles, 8]` where the last coordinates represent the 3D Bounding Box encoded by X,Y,Z,yaw,pitch,Width,Length,Height. Note that the X,Y,Z correspond to the centre of the 3DBB in the global coordinate system. The roll angle is ignored (roll=0).
 - `pedestrian_boundingbox` with dimensions `[frames, pedestrians , 8]` where the last coordinates represent the 3DBB encoded as before.
 
 Where
@@ -30,14 +26,62 @@ Where
 - `point_per_cloud` is the maximum number of points per pointcloud. Sometimes a given pointcloud will have less points that this maximum, in that case we pad the entries with zeros to be able to concatenate them into a uniformly sized array.
 - `pedestrians` is the number of pedestrians in the environment.
 
-Notes:
-1. The point clouds are in the local coordinate system of each sensor, whose pose is given by `lidar_pose`.
+**Notes:**
+1. The point clouds are in the local coordinate system of each sensor, where the transformation from local to global coordinate system is computed using `lidar_pose`.
 2. Angles are always in degrees.
 3. Pose is represented using the UnrealEngine4 left-hand coordinate system. An example to reconstruct a transformation matrix from local -> global is available in `vis.py`, where such matrix is used to aggregate all local lidar point clouds into a global reference system.
 4. The vehicle index is shared across `pointcloud`, `lidar_pose` and `vehicle_boundingbox`, i.e. the point cloud at index [frame,i] correspond to the vehicle with bounding box at [frame,i].
-5. The vehicle and pedestrian indeces are consistent across frames, allowing to determine the track of a given vehicle/pedestrian.
+5. The vehicle and pedestrian indices are consistent across frames, allowing to determine the track of a given vehicle/pedestrian.
+6. All point clouds of a given frame are synchronised in time - they were captured at exactly the same time instant.
 
-## Generating data
+## Downloading the Dataset
+Although this repository provides the tools to generate your own dataset (see [Generating your own data](#generating-your-own-data)), we have generated an official release of the dataset.
+
+This dataset contains **108 snippets** across **all available CARLA maps**.
+The snippets file names encode the properties of the snippets as `m[mapNumber]v[numVehicles]p[numPedestrians]s[seed].hdf5`.
+
+[Download here](https://livewarwickac-my.sharepoint.com/:u:/g/personal/u1793915_live_warwick_ac_uk/ESGKXrOVZ2BAmbvV4HviTPkB0ICOL7b0vt6hl4LdotSXcQ?e=mZOgHe).
+
+This official dataset was generated with the following settings:
+- 5 fps
+- 125 frames (corresponding to 25s of simulation time per snippet)
+- 50k points per cloud
+- 100m lidar range
+- 30 burnt frames (discarded frames in the beggining of simulation)
+- nvehicles sampled from a binomial distribution with mean 10 and var 5
+- npedestrians sampled from a binomial distribution with mean 5 and var 2
+
+## Visualising the snippets
+
+To visualise the data, please install the following dependencies:
+- Python 3.x
+- h5py
+- numpy
+- Mayavi >= 4.7.2 
+
+Then run:
+```
+python vis.py [path_to_snippet]
+```
+
+Note that you may want to pause the animation and adjust the view.
+The visualisation iteratively goes through all the frames, presenting the fusion of the point cloud from all vehicles transformed to the global coordinate system.
+It also shows the ground-truth bounding boxes for vehicles (in green) and pedestrians (in cyan).
+
+![video showing frames](static/video.gif)
+
+## Generating your own data
+
+### Requirements
+Before getting started, please install the following dependencies:
+- CARLA >= 0.9.10
+- Python 3.x
+- h5py
+- numpy
+
+Note: If the CARLA python package is not available in the python path you need to manually provide the path to the `.egg` file in `fixpath.py`.
+
+### Creating snippets
 To generate the data one must firstly start the CARLA simlator:
 ```
 cd CARLA_PATH
@@ -60,6 +104,7 @@ The `seed` argument defines the RNG seed which allows to reproduce the same scen
 
 For more options, such as the number of points per cloud or the number of lidar lasers, or the lower lidar angle, see `python genSnippet.py -h`.
 
+### Creating a collection of snippets
 Alternatively, to generate a collection of snippets one can use
 ```
 python genDataset.py N
@@ -69,32 +114,3 @@ This script randomly selects a map and sample from specific distributions for nu
 Other options may be individually set-up within the script.
 
 Note: Town06,Town07 and Town10HD need to be installed separately in CARLA, see [here](https://carla.readthedocs.io/en/latest/start_quickstart/#import-additional-assets).
-
-## Visualising the snippets
-To visualise a snippet one can use
-```
-python vis.py [path_to_snippet]
-```
-
-Note that you may want to pause the animation and adjust the view.
-The visualisation iteratively goes through all the frames, presenting the fused point cloud from all vehicles.
-It also shows the ground-truth bounding boxes for vehicles (in green) and pedestrians (in cyan).
-
-![video showing frames](static/video.gif)
-
-## Downloading the Dataset
-Although this repository provided the tools to generate your own dataset, we have generated an official release of the dataset.
-
-This dataset contains 108 snippets across all available CARLA maps.
-The snippets file names encode the properties of the snippes as `m[mapNumber]v[numVehicles]p[numPedestrians]s[seed].hdf5`.
-
-[Download here](https://livewarwickac-my.sharepoint.com/:u:/g/personal/u1793915_live_warwick_ac_uk/ESGKXrOVZ2BAmbvV4HviTPkB0ICOL7b0vt6hl4LdotSXcQ?e=mZOgHe).
-
-This dataset was generated with the following settings:
-- 5 fps
-- 125 frames (corresponding to 25s of simulation time per snippet)
-- 50k points per cloud
-- 100m lidar range
-- 30 burnt frames
-- nvehicles from a binomial distribution with mean 10 and var 5
-- npedestrians from a binomial distribution with mean 5 and var 2
