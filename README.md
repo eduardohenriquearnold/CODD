@@ -1,5 +1,7 @@
 # Cooperative Driving Dataset (CODD)
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5720317.svg)](https://doi.org/10.5281/zenodo.5720317)
+
 The Cooperative Driving dataset is a synthetic dataset generated using [CARLA](https://github.com/carla-simulator/carla) that contains lidar data from multiple vehicles navigating simultaneously through a diverse set of driving scenarios.
 This dataset was created to enable further research in multi-agent perception (cooperative perception) including cooperative 3D object detection, cooperative object tracking, multi-agent SLAM and point cloud registration.
 Towards that goal, all the frames have been labelled with ground-truth sensor pose and 3D object bounding boxes.
@@ -40,7 +42,7 @@ Although this repository provides the tools to generate your own dataset (see [G
 This dataset contains **108 snippets** across **all available CARLA maps**.
 The snippets file names encode the properties of the snippets as `m[mapNumber]v[numVehicles]p[numPedestrians]s[seed].hdf5`.
 
-[Download here](https://livewarwickac-my.sharepoint.com/:u:/g/personal/u1793915_live_warwick_ac_uk/ESGKXrOVZ2BAmbvV4HviTPkB0ICOL7b0vt6hl4LdotSXcQ?e=mZOgHe).
+[Download here](https://doi.org/10.5281/zenodo.5720317).
 
 This official dataset was generated with the following settings:
 - 5 fps
