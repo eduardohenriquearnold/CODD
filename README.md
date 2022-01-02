@@ -121,10 +121,15 @@ Note: Town06,Town07 and Town10HD need to be installed separately in CARLA, see [
 ## Citation
 If you use our dataset or generate your own dataset using parts of our code, please cite
 ```
-@article{arnold_fast_reg,
-	title={{Fast and Robust Registration of Partially Overlapping Point Clouds}},
-	author={Arnold, Eduardo and Mozaffari, Sajjad and Dianati, Mehrdad},
-	year={2021}
+@article{arnold2021fastreg,
+  author={Arnold, Eduardo and Mozaffari, Sajjad and Dianati, Mehrdad},
+  journal={IEEE Robotics and Automation Letters},
+  title={Fast and Robust Registration of Partially Overlapping Point Clouds},
+  year={2021},
+  volume={},
+  number={},
+  pages={1-8},
+  doi={10.1109/LRA.2021.3137888}
 }
 ```
 
